@@ -1,3 +1,5 @@
+import datetime
+import time
 import random
 import tkinter as tk
 from sosGUI import GameGUI
@@ -21,7 +23,6 @@ class Player:
   def score_point(self):
     self.score += 1
 
-
 class sosGame:
   def __init__(self, root):
     self.root = root
@@ -43,26 +44,31 @@ class sosGame:
     if (i >= self.board.size or i < 0 or j >= self.board.size or j < 0):
       self.gui.display_message("Error: Not a valid space")
       return
-    if self.board.spaces[i][j]['text'] == '':
-      self.gui.clear_message()
-      self.board.set_move(i, j, self.current_symbol())
-      self.score_sos(i, j)
-      self.gui.display_scores()
-      if (self.detect_game_ended()):
-        if (self.determine_winner() != 'tie'):
-          self.gui.display_message(f"Congratulations! {self.determine_winner()} has won the game!")
-        else:
-          self.gui.display_message("The game has ended in a tie!")
-        return
-      self.change_turn()
-    else:
-      self.gui.display_message("Error: Please pick unoccupied space")
+    if not self.detect_game_ended():
+      if self.board.spaces[i][j]['text'] == '':
+        self.gui.clear_message()
+        self.board.set_move(i, j, self.current_symbol())
+        if self.turn.type != 'Replay':
+          self.recording.write(f"{i}, {j}, {self.current_symbol()}\n")
+        self.score_sos(i, j)
+        self.gui.display_scores()
+        if (self.detect_game_ended()):
+          if (self.determine_winner() != 'tie'):
+            self.gui.display_message(f"Congratulations! {self.determine_winner()} has won the game!")
+          else:
+            self.gui.display_message("The game has ended in a tie!")
+          return
+        self.change_turn()
+      else:
+        self.gui.display_message("Error: Please pick unoccupied space")
 
   def change_turn(self):
     self.turn = self.players[1] if self.turn == self.players[0] else self.players[0]
     self.gui.display_turn()
     if self.turn.type == 'Computer':
       self.computer_turn()
+    if self.turn.type == 'Replay':
+      self.replay_turn()
 
   def computer_turn(self):
     move = self.board.best_move()
@@ -93,7 +99,7 @@ class sosGame:
       if i > 0 and i < self.board.size - 1 and self.board.spaces[i + 1][j]['text'] == 'S' and self.board.spaces[i - 1][j]['text'] == 'S':
         self.turn.score_point()
     if self.board.spaces[i][j]['text'] == 'S':
-      if i > 1 and j > 1 and i < self.board.size - 2 and j < self.board.size - 2 and self.board.spaces[i + 1][j + 1]['text'] == 'O' and self.board.spaces[i + 2][j + 2]['text'] == 'S':
+      if i < self.board.size - 2 and j < self.board.size - 2 and self.board.spaces[i + 1][j + 1]['text'] == 'O' and self.board.spaces[i + 2][j + 2]['text'] == 'S':
         self.turn.score_point()
       if j > 1 and i < self.board.size - 2 and self.board.spaces[i + 1][j - 1]['text'] == 'O' and self.board.spaces[i + 2][j - 2]['text'] == 'S':
         self.turn.score_point()
@@ -113,11 +119,13 @@ class sosGame:
   def detect_game_ended(self):
     if self.mode == 'Simple':
       if (self.players[1].score > 0 or self.players[0].score > 0 or self.board.is_board_full()):
+        self.recording.close()
         return True
       else:
         return False
     else:
       if (self.board.is_board_full()):
+        self.recording.close()
         return True
       else:
         return False
@@ -133,17 +141,53 @@ class sosGame:
   def create_new_game(self):
     self.gui.clear_board()
     self.gui.clear_message()
-    self.board.select_size()
+    size = int(self.gui.board_size_entry.get()) if self.gui.board_size_entry.get() != '' else 8
+    self.board.select_size(size)
     self.players[0].score = 0
     self.players[1].score = 0
-    self.players[0].change_symbol(self.gui.selected_red_move.get())
-    self.players[1].change_symbol(self.gui.selected_blue_move.get())
+    self.players[0].type = self.gui.selected_red_player_type.get()
+    self.players[1].type = self.gui.selected_blue_player_type.get()
+    self.players[0].symbol = self.gui.selected_red_move.get()
+    self.players[1].symbol = self.gui.selected_blue_move.get()
     self.turn = self.players[0]
     self.gui.display_scores()
     self.gui.display_board()
     self.gui.show_stuff()
+    self.recording = open(f'recordings/game_{datetime.datetime.now().strftime("%m%d%y%H%M%S")}.txt', 'a')
+    self.recording.write(f'mode: {self.mode}, size: {self.board.size}\n')
     if(self.players[0].type == 'Computer'):
       self.computer_turn()
+
+  def replay_game(self):
+    self.gui.clear_board()
+    self.gui.clear_message()
+    try:
+      self.recording = open(f"recordings/{self.gui.replay_entry.get()}")
+    except:
+      self.gui.display_message(f"Please enter a valid file name.")
+      return
+    self.mode, self.board.size = [part.split(": ")[1] for part in self.recording.readline().split(', ')]
+    self.board.size = int(self.board.size)
+    self.board.select_size(self.board.size)
+    self.players[0].score = 0
+    self.players[1].score = 0
+    self.turn = self.players[0]
+    self.players[0].type = 'Replay'
+    self.players[1].type = 'Replay'
+    self.gui.display_scores()
+    self.gui.display_board()
+    self.gui.show_stuff()
+    self.replay_turn()
+
+  def replay_turn(self):
+    move = self.recording.readline().split(', ')
+    if move[0] == '':
+      return
+    i = int(move[0])
+    j = int(move[1])
+    symbol = move[2][0]
+    self.turn.change_symbol(symbol)
+    self.place_move(i, j)
 
 class sosBoard:
   def __init__(self, game, size):
@@ -152,8 +196,7 @@ class sosBoard:
     self.move_count = 0
     self.spaces = [[None for _ in range(self.size)] for _ in range(self.size)]
 
-  def select_size(self):
-    new_size = int(self.game.gui.board_size_entry.get()) if self.game.gui.board_size_entry.get() != "" else 8
+  def select_size(self, new_size):
     if new_size > 2:
       self.size = new_size
       self.spaces = [[None for _ in range(self.size)] for _ in range(self.size)]

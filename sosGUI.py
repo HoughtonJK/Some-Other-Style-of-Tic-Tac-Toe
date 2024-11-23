@@ -65,6 +65,13 @@ class GameGUI:
     self.blue_score_label = tk.Label(self.root, text=f"Blue: {self.game.players[1].score}")
     self.blue_score_label.grid(row=9, column=1)
 
+    self.replay_label = tk.Label(self.root, text="Replay file name:")
+    self.replay_label.grid(row=10, column=0)
+    self.replay_entry = tk.Entry(self.root, width=20)
+    self.replay_entry.grid(row=10, column=1)
+    self.replay_button = tk.Button(self.root, text="Replay", command=self.game.replay_game)
+    self.replay_button.grid(row=10, column=2)
+
     self.display_board()
 
   def show_stuff(self):
